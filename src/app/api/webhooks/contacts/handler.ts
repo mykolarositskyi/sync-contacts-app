@@ -1,7 +1,8 @@
-import { Logger, validateIntegrationMetadata, validateWebhookBody, WebhookResultBuilder } from "@/lib";
+import { Logger, validateIntegrationMetadata, validateWebhookBody, WebhookResultBuilder, IntegrationActionsService } from "@/lib";
 import { ContactService } from "@/lib/contact.service";
 import { ContactProvider, ContactWebhookBody, ContactWebhookEventType, WebhookProcessingResult } from "@/types/webhooks";
 import { createNewContactWithIntegration, processExistingContactIntegration } from "./helpers";
+import { extractContactData, createIntegrationData } from "@/lib/webhook-utils";
 
 const handleCreateContact = async (body: ContactWebhookBody): Promise<WebhookProcessingResult> => {
     const logger = new Logger('handleCreateContact');
@@ -63,7 +64,7 @@ const handleUpdateContact = async (body: ContactWebhookBody): Promise<WebhookPro
         }
 
         // Update contact
-        const contactData = await import("@/lib/webhook-utils").then(utils => utils.extractContactData(body));
+        const contactData = extractContactData(body);
         const updatedContact = await ContactService.updateContact(
             existingContact.id,
             body.customerId,
@@ -77,7 +78,7 @@ const handleUpdateContact = async (body: ContactWebhookBody): Promise<WebhookPro
         }
 
         // Sync across integrations
-        await (await import("@/lib")).IntegrationActionsService.updateContactAcrossIntegrations(
+        await IntegrationActionsService.updateContactAcrossIntegrations(
             { customerId: body.customerId, customerName: null },
             updatedContact,
             [integrationKey]
@@ -124,7 +125,7 @@ const handleDeleteContact = async (body: ContactWebhookBody): Promise<WebhookPro
 
         // Delete across integrations
         logger.log('Deleting contact across integrations', body.externalContactId);
-        await (await import("@/lib")).IntegrationActionsService.deleteContactAcrossIntegrations(
+        await IntegrationActionsService.deleteContactAcrossIntegrations(
             { customerId: body.customerId, customerName: null },
             contact,
             [integrationKey]
@@ -152,7 +153,7 @@ const handleCreateContactInternal = async (body: ContactWebhookBody): Promise<We
         const integrationKey = body.integrationMetadata!.key as ContactProvider;
 
         logger.log('Creating contact internal', body);
-        const integrationData = await import("@/lib/webhook-utils").then(utils => utils.createIntegrationData(body, integrationKey));
+        const integrationData = createIntegrationData(body, integrationKey);
 
         await ContactService.addInternalIntegration(
             integrationData.internalContactId,
